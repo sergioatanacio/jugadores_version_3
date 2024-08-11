@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Juego de Tanques - 2 Jugadores</title>
+    <style>
+        canvas {
+            border: 1px solid black;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="1200" height="800"></canvas>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        class Tank {
+            constructor(x, y, color, rotateLeftKey, rotateRightKey, moveKey, shootKey) {
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                this.angle = 0;
+                this.rotateLeftKey = rotateLeftKey;
+                this.rotateRightKey = rotateRightKey;
+                this.moveKey = moveKey;
+                this.shootKey = shootKey;
+                this.health = 3;
+                this.ammo = 0;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.angle);
+                ctx.fillStyle = this.color;
+                ctx.fillRect(-10, -10, 20, 20);
+                ctx.fillRect(0, -3, 15, 6);
+                ctx.restore();
+
+                ctx.fillStyle = 'black';
+                ctx.font = '12px Arial';
+                ctx.fillText(`Balas: ${this.ammo}`, this.x - 15, this.y + 25);
+            }
+
+            rotateLeft() {
+                this.angle -= 0.1;
+            }
+
+            rotateRight() {
+                this.angle += 0.1;
+            }
+
+            move() {
+                const newX = this.x + Math.cos(this.angle) * 3;
+                const newY = this.y + Math.sin(this.angle) * 3;
+                if (!checkObstacleCollision(newX, newY)) {
+                    this.x = Math.max(10, Math.min(canvas.width - 10, newX));
+                    this.y = Math.max(10, Math.min(canvas.height - 10, newY));
+                }
+            }
+
+            shoot() {
+                if (this.ammo > 0) {
+                    bullets.push(new Bullet(this.x, this.y, this.angle, this.color));
+                    this.ammo--;
+                }
+            }
+        }
+
+        class Bullet {
+            constructor(x, y, angle, color) {
+                this.x = x;
+                this.y = y;
+                this.angle = angle;
+                this.color = color;
+                this.speed = 5;
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            move() {
+                const newX = this.x + Math.cos(this.angle) * this.speed;
+                const newY = this.y + Math.sin(this.angle) * this.speed;
+                if (!checkObstacleCollision(newX, newY)) {
+                    this.x = newX;
+                    this.y = newY;
+                } else {
+                    return true;
+                }
+                return false;
+            }
+        }
+
+        class Ammo {
+            constructor() {
+                do {
+                    this.x = Math.random() * (canvas.width - 10) + 5;
+                    this.y = Math.random() * (canvas.height - 10) + 5;
+                } while (checkObstacleCollision(this.x, this.y));
+                this.amount = Math.floor(Math.random() * 4) + 2;
+            }
+
+            draw() {
+                ctx.fillStyle = 'yellow';
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, 5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        class Obstacle {
+            constructor() {
+                this.relocate();
+            }
+
+            draw() {
+                ctx.fillStyle = 'gray';
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+            }
+
+            relocate() {
+                if (Math.random() < 0.5) {
+                    // Obstáculo horizontal
+                    this.width = Math.random() * 150 + 100;
+                    this.height = Math.random() * 10 + 5;
+                } else {
+                    // Obstáculo vertical
+                    this.width = Math.random() * 10 + 5;
+                    this.height = Math.random() * 150 + 100;
+                }
+                this.x = Math.random() * (canvas.width - this.width);
+                this.y = Math.random() * (canvas.height - this.height);
+            }
+        }
+
+        const tank1 = new Tank(100, 400, 'blue', 'a', 'd', 'w', 's');
+        const tank2 = new Tank(1100, 400, 'red', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown');
+        let bullets = [];
+        let ammoBoxes = [];
+        let obstacles = Array(20).fill().map(() => new Obstacle());
+
+        function checkObstacleCollision(x, y) {
+            return obstacles.some(obstacle => 
+                x > obstacle.x && 
+                x < obstacle.x + obstacle.width && 
+                y > obstacle.y && 
+                y < obstacle.y + obstacle.height
+            );
+        }
+
+        function checkCollision(obj1, obj2) {
+            const dx = obj1.x - obj2.x;
+            const dy = obj1.y - obj2.y;
+            return Math.sqrt(dx * dx + dy * dy) < 15;
+        }
+
+        function spawnAmmo() {
+            if (ammoBoxes.length < 8) {
+                ammoBoxes.push(new Ammo());
+            }
+        }
+
+        function relocateObstacles() {
+            obstacles.forEach(obstacle => obstacle.relocate());
+        }
+
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            obstacles.forEach(obstacle => obstacle.draw());
+
+            tank1.draw();
+            tank2.draw();
+
+            bullets = bullets.filter((bullet, index) => {
+                if (bullet.move()) {
+                    return false;
+                }
+                bullet.draw();
+
+                if (checkCollision(bullet, bullet.color === 'blue' ? tank2 : tank1)) {
+                    if (bullet.color === 'blue') {
+                        tank2.health--;
+                    } else {
+                        tank1.health--;
+                    }
+                    return false;
+                }
+
+                if (bullet.x < 0 || bullet.x > canvas.width || bullet.y < 0 || bullet.y > canvas.height) {
+                    return false;
+                }
+
+                return true;
+            });
+
+            ammoBoxes = ammoBoxes.filter((ammo, index) => {
+                ammo.draw();
+                if (checkCollision(ammo, tank1)) {
+                    tank1.ammo += ammo.amount;
+                    return false;
+                } else if (checkCollision(ammo, tank2)) {
+                    tank2.ammo += ammo.amount;
+                    return false;
+                }
+                return true;
+            });
+
+            ctx.fillStyle = 'black';
+            ctx.font = '20px Arial';
+            ctx.fillText(`Jugador 1: ${tank1.health}`, 10, 30);
+            ctx.fillText(`Jugador 2: ${tank2.health}`, canvas.width - 120, 30);
+
+            if (tank1.health <= 0 || tank2.health <= 0) {
+                ctx.fillStyle = 'black';
+                ctx.font = '40px Arial';
+                ctx.fillText(`¡${tank1.health <= 0 ? 'Jugador 2' : 'Jugador 1'} gana!`, canvas.width / 2 - 100, canvas.height / 2);
+                return;
+            }
+
+            spawnAmmo();
+            requestAnimationFrame(gameLoop);
+        }
+
+        document.addEventListener('keydown', (event) => {
+            switch (event.key) {
+                case tank1.rotateLeftKey: tank1.rotateLeft(); break;
+                case tank1.rotateRightKey: tank1.rotateRight(); break;
+                case tank1.moveKey: tank1.move(); break;
+                case tank1.shootKey: tank1.shoot(); break;
+                case tank2.rotateLeftKey: tank2.rotateLeft(); break;
+                case tank2.rotateRightKey: tank2.rotateRight(); break;
+                case tank2.moveKey: tank2.move(); break;
+                case tank2.shootKey: tank2.shoot(); break;
+            }
+        });
+
+        gameLoop();
+
+        setInterval(() => {
+            relocateObstacles();
+        }, Math.floor(Math.random() * 4000) + 3000); // Entre 3000 y 7000 ms
+    </script>
+</body>
+</html>
